@@ -1,0 +1,280 @@
+import { useState, useMemo } from "react";
+import { records, type Record as DataRecord, type RecordStatus, type RecordCategory, type Region } from "@/lib/mock-data";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Table, TableHeader, TableBody, TableRow, TableHead, TableCell,
+} from "@/components/ui/table";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import { ArrowUpDown, ArrowUp, ArrowDown, Search, Download, X, ChevronLeft, ChevronRight } from "lucide-react";
+import { cn } from "@/lib/utils";
+
+type SortDir = "asc" | "desc" | null;
+type SortState = { key: keyof DataRecord; dir: SortDir };
+
+const PAGE_SIZES = [25, 50, 100];
+
+const STATUS_COLORS: { [k in RecordStatus]: string } = {
+  active: "bg-success/15 text-success border-success/30",
+  pending: "bg-warning/15 text-warning border-warning/30",
+  closed: "bg-muted text-muted-foreground border-border",
+  flagged: "bg-destructive/15 text-destructive border-destructive/30",
+  archived: "bg-secondary text-secondary-foreground border-border",
+};
+
+export default function Records() {
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [regionFilter, setRegionFilter] = useState<string>("all");
+  const [sort, setSort] = useState<SortState>({ key: "createdAt", dir: "desc" });
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(25);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  const activeFilters = [
+    statusFilter !== "all" && { label: `Status: ${statusFilter}`, clear: () => setStatusFilter("all") },
+    categoryFilter !== "all" && { label: `Category: ${categoryFilter}`, clear: () => setCategoryFilter("all") },
+    regionFilter !== "all" && { label: `Region: ${regionFilter}`, clear: () => setRegionFilter("all") },
+    search && { label: `Search: "${search}"`, clear: () => setSearch("") },
+  ].filter(Boolean) as { label: string; clear: () => void }[];
+
+  const filtered = useMemo(() => {
+    let data = [...records];
+    if (search) {
+      const q = search.toLowerCase();
+      data = data.filter((r) =>
+        r.id.toLowerCase().includes(q) || r.name.toLowerCase().includes(q) || r.owner.toLowerCase().includes(q)
+      );
+    }
+    if (statusFilter !== "all") data = data.filter((r) => r.status === statusFilter);
+    if (categoryFilter !== "all") data = data.filter((r) => r.category === categoryFilter);
+    if (regionFilter !== "all") data = data.filter((r) => r.region === regionFilter);
+    if (sort.dir) {
+      data.sort((a, b) => {
+        const av = a[sort.key];
+        const bv = b[sort.key];
+        if (typeof av === "number" && typeof bv === "number") return sort.dir === "asc" ? av - bv : bv - av;
+        return sort.dir === "asc" ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av));
+      });
+    }
+    return data;
+  }, [search, statusFilter, categoryFilter, regionFilter, sort]);
+
+  const totalPages = Math.ceil(filtered.length / pageSize);
+  const paged = filtered.slice(page * pageSize, (page + 1) * pageSize);
+
+  function toggleSort(key: keyof DataRecord) {
+    setSort((prev) => {
+      if (prev.key !== key) return { key, dir: "asc" };
+      if (prev.dir === "asc") return { key, dir: "desc" };
+      return { key, dir: null };
+    });
+  }
+
+  function SortIcon({ col }: { col: keyof DataRecord }) {
+    if (sort.key !== col || !sort.dir) return <ArrowUpDown className="h-3 w-3 opacity-30" />;
+    return sort.dir === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />;
+  }
+
+  function toggleSelect(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
+
+  function toggleAll() {
+    if (selected.size === paged.length) {
+      setSelected(new Set());
+    } else {
+      setSelected(new Set(paged.map((r) => r.id)));
+    }
+  }
+
+  function exportCSV() {
+    const headers = ["id", "name", "status", "category", "region", "amount", "createdAt", "updatedAt", "owner"];
+    const rows = filtered.map((r) => headers.map((h) => String(r[h as keyof DataRecord])).join(","));
+    const csv = [headers.join(","), ...rows].join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "records-export.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <h1 className="text-sm font-semibold">Records</h1>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" className="h-7 gap-1 text-xs" onClick={exportCSV}>
+            <Download className="h-3 w-3" /> Export
+          </Button>
+        </div>
+      </div>
+
+      {/* Filters bar */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative">
+          <Search className="absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Search records…"
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setPage(0); }}
+            className="h-7 w-52 pl-7 text-xs"
+          />
+        </div>
+        <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(0); }}>
+          <SelectTrigger className="h-7 w-28 text-xs"><SelectValue placeholder="Status" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Status</SelectItem>
+            {["active", "pending", "closed", "flagged", "archived"].map((s) => (
+              <SelectItem key={s} value={s}>{s}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={categoryFilter} onValueChange={(v) => { setCategoryFilter(v); setPage(0); }}>
+          <SelectTrigger className="h-7 w-32 text-xs"><SelectValue placeholder="Category" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Categories</SelectItem>
+            {["sales", "support", "engineering", "marketing", "operations"].map((c) => (
+              <SelectItem key={c} value={c}>{c}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={regionFilter} onValueChange={(v) => { setRegionFilter(v); setPage(0); }}>
+          <SelectTrigger className="h-7 w-24 text-xs"><SelectValue placeholder="Region" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Regions</SelectItem>
+            {["NA", "EMEA", "APAC", "LATAM"].map((r) => (
+              <SelectItem key={r} value={r}>{r}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Active filter chips */}
+      {activeFilters.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1">
+          {activeFilters.map((f) => (
+            <Badge key={f.label} variant="secondary" className="gap-1 text-2xs cursor-pointer" onClick={f.clear}>
+              {f.label} <X className="h-2.5 w-2.5" />
+            </Badge>
+          ))}
+          <button
+            className="text-2xs text-muted-foreground hover:text-foreground"
+            onClick={() => { setSearch(""); setStatusFilter("all"); setCategoryFilter("all"); setRegionFilter("all"); }}
+          >
+            Clear all
+          </button>
+        </div>
+      )}
+
+      {/* Bulk actions */}
+      {selected.size > 0 && (
+        <div className="flex items-center gap-2 rounded-sm border border-primary/20 bg-primary/5 px-3 py-1.5">
+          <span className="text-xs font-medium">{selected.size} selected</span>
+          <Button variant="outline" size="sm" className="h-6 text-2xs" onClick={exportCSV}>Export Selected</Button>
+          <Button variant="ghost" size="sm" className="h-6 text-2xs" onClick={() => setSelected(new Set())}>Clear</Button>
+        </div>
+      )}
+
+      {/* Table */}
+      <div className="rounded-sm border border-border">
+        <Table>
+          <TableHeader>
+            <TableRow className="hover:bg-transparent">
+              <TableHead className="w-8 px-2">
+                <Checkbox checked={paged.length > 0 && selected.size === paged.length} onCheckedChange={toggleAll} />
+              </TableHead>
+              {[
+                { key: "id" as const, label: "ID", w: "w-24" },
+                { key: "name" as const, label: "Name", w: "min-w-[180px]" },
+                { key: "status" as const, label: "Status", w: "w-24" },
+                { key: "category" as const, label: "Category", w: "w-28" },
+                { key: "region" as const, label: "Region", w: "w-20" },
+                { key: "amount" as const, label: "Amount", w: "w-28 text-right" },
+                { key: "owner" as const, label: "Owner", w: "w-32" },
+                { key: "createdAt" as const, label: "Created", w: "w-28" },
+              ].map((col) => (
+                <TableHead
+                  key={col.key}
+                  className={cn("h-8 px-2 text-2xs cursor-pointer select-none", col.w)}
+                  onClick={() => toggleSort(col.key)}
+                >
+                  <div className="flex items-center gap-1">
+                    {col.label}
+                    <SortIcon col={col.key} />
+                  </div>
+                </TableHead>
+              ))}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {paged.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={9} className="h-24 text-center text-xs text-muted-foreground">
+                  No results found.{" "}
+                  <button className="text-primary underline" onClick={() => { setSearch(""); setStatusFilter("all"); setCategoryFilter("all"); setRegionFilter("all"); }}>
+                    Clear filters
+                  </button>
+                </TableCell>
+              </TableRow>
+            ) : (
+              paged.map((r) => (
+                <TableRow key={r.id} className="h-8" data-state={selected.has(r.id) ? "selected" : undefined}>
+                  <TableCell className="px-2">
+                    <Checkbox checked={selected.has(r.id)} onCheckedChange={() => toggleSelect(r.id)} />
+                  </TableCell>
+                  <TableCell className="px-2 text-2xs font-mono">{r.id}</TableCell>
+                  <TableCell className="px-2 text-xs font-medium">{r.name}</TableCell>
+                  <TableCell className="px-2">
+                    <Badge variant="outline" className={cn("text-2xs", STATUS_COLORS[r.status])}>
+                      {r.status}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="px-2 text-2xs capitalize">{r.category}</TableCell>
+                  <TableCell className="px-2 text-2xs">{r.region}</TableCell>
+                  <TableCell className="px-2 text-right text-2xs font-mono">${r.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
+                  <TableCell className="px-2 text-2xs">{r.owner}</TableCell>
+                  <TableCell className="px-2 text-2xs text-muted-foreground">{r.createdAt.substring(0, 10)}</TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
+
+      {/* Pagination */}
+      <div className="flex items-center justify-between">
+        <span className="text-2xs text-muted-foreground">
+          {filtered.length} records · Page {page + 1} of {totalPages}
+        </span>
+        <div className="flex items-center gap-2">
+          <Select value={String(pageSize)} onValueChange={(v) => { setPageSize(Number(v)); setPage(0); }}>
+            <SelectTrigger className="h-6 w-16 text-2xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {PAGE_SIZES.map((s) => (
+                <SelectItem key={s} value={String(s)}>{s}/page</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button variant="outline" size="sm" className="h-6 w-6 p-0" disabled={page === 0} onClick={() => setPage(page - 1)}>
+            <ChevronLeft className="h-3 w-3" />
+          </Button>
+          <Button variant="outline" size="sm" className="h-6 w-6 p-0" disabled={page >= totalPages - 1} onClick={() => setPage(page + 1)}>
+            <ChevronRight className="h-3 w-3" />
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
