@@ -1,1 +1,0 @@
-ALTER TABLE public.companies ADD COLUMN last_updated_by integer;
