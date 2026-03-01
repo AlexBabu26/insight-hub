@@ -3000,7 +3000,6 @@ export type Database = {
           gps_coordinates: string | null
           id: number
           is_internal_company: boolean | null
-          last_updated_by: number | null
           linkedin: string | null
           logo: string | null
           name: string | null
@@ -3046,7 +3045,6 @@ export type Database = {
           gps_coordinates?: string | null
           id: number
           is_internal_company?: boolean | null
-          last_updated_by?: number | null
           linkedin?: string | null
           logo?: string | null
           name?: string | null
@@ -3092,7 +3090,6 @@ export type Database = {
           gps_coordinates?: string | null
           id?: number
           is_internal_company?: boolean | null
-          last_updated_by?: number | null
           linkedin?: string | null
           logo?: string | null
           name?: string | null
