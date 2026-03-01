@@ -4414,6 +4414,7 @@ export type Database = {
           inactive_reason: string | null
           language: string | null
           last_name: string
+          last_updated_by: string | null
           linkedin: string | null
           lusha_json: Json | null
           mobile_area_code1: string | null
@@ -4467,6 +4468,7 @@ export type Database = {
           inactive_reason?: string | null
           language?: string | null
           last_name: string
+          last_updated_by?: string | null
           linkedin?: string | null
           lusha_json?: Json | null
           mobile_area_code1?: string | null
@@ -4520,6 +4522,7 @@ export type Database = {
           inactive_reason?: string | null
           language?: string | null
           last_name?: string
+          last_updated_by?: string | null
           linkedin?: string | null
           lusha_json?: Json | null
           mobile_area_code1?: string | null
