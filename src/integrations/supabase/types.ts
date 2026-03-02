@@ -3003,7 +3003,6 @@ export type Database = {
           linkedin: string | null
           logo: string | null
           name: string | null
-          new_name_test: string | null
           notes: string | null
           old_syn_id: number | null
           phone_area_code1: string | null
@@ -3049,7 +3048,6 @@ export type Database = {
           linkedin?: string | null
           logo?: string | null
           name?: string | null
-          new_name_test?: string | null
           notes?: string | null
           old_syn_id?: number | null
           phone_area_code1?: string | null
@@ -3095,7 +3093,6 @@ export type Database = {
           linkedin?: string | null
           logo?: string | null
           name?: string | null
-          new_name_test?: string | null
           notes?: string | null
           old_syn_id?: number | null
           phone_area_code1?: string | null
