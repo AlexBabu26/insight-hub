@@ -1,0 +1,94 @@
+# ──────────────────────────────────────────────────────────────
+# PRODUCER-SIDE WORKFLOW — place in each producer repo:
+#   insight-hub/.github/workflows/sync-supabase-to-infra.yml
+#   insight-hub-mfe/.github/workflows/sync-supabase-to-infra.yml
+# ──────────────────────────────────────────────────────────────
+name: Sync Supabase artifacts to infra repo
+
+on:
+  push:
+    branches: [dev, main]
+    paths:
+      - "supabase/migrations/**"
+      - "supabase/functions/**"
+
+concurrency:
+  group: supabase-sync-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout producer repo
+        uses: actions/checkout@v4
+        with:
+          path: producer
+
+      - name: Checkout infra repo (target branch)
+        uses: actions/checkout@v4
+        with:
+          repository: helpdesk-bnc/supabase-primetest-prod
+          token: ${{ secrets.INFRA_REPO_PAT }}
+          ref: ${{ github.ref_name }}
+          path: infra
+
+      # ── Policy B: additive sync (no --delete) ─────────────
+      # Multiple producer repos can contribute without stomping
+      # on each other's files. Only new/changed files are copied.
+      - name: Sync migrations (additive)
+        run: |
+          if [ -d producer/supabase/migrations ]; then
+            mkdir -p infra/supabase/migrations
+            rsync -av --itemize-changes \
+              producer/supabase/migrations/ \
+              infra/supabase/migrations/
+          fi
+
+      - name: Sync edge functions (additive)
+        run: |
+          if [ -d producer/supabase/functions ]; then
+            mkdir -p infra/supabase/functions
+            rsync -av --itemize-changes \
+              producer/supabase/functions/ \
+              infra/supabase/functions/
+          fi
+
+      # ── Commit & push with retry for concurrent syncs ──────
+      - name: Commit and push to infra
+        working-directory: infra
+        env:
+          PRODUCER_REPO: ${{ github.repository }}
+          PRODUCER_SHA: ${{ github.sha }}
+          BRANCH: ${{ github.ref_name }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add supabase/
+
+          if git diff --cached --quiet; then
+            echo "::notice::No Supabase changes to sync"
+            exit 0
+          fi
+
+          git commit -m "sync(${PRODUCER_REPO##*/}): supabase artifacts -> ${BRANCH}
+
+          Source: ${PRODUCER_REPO}@${PRODUCER_SHA}
+          Actor: ${ACTOR}"
+
+          # Retry loop — if the other producer pushed first, rebase and retry
+          for attempt in 1 2 3; do
+            if git push; then
+              echo "::notice::Push succeeded (attempt ${attempt})"
+              exit 0
+            fi
+            echo "::warning::Push failed (attempt ${attempt}/3), rebasing…"
+            git pull --rebase origin "${BRANCH}"
+          done
+
+          echo "::error::Push failed after 3 attempts"
+          exit 1
